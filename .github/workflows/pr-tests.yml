@@ -2,6 +2,9 @@
 name: PR Tests
 
 on:
+  push: # ← también al “subirlo a GitHub”
+    branches:
+      - "**"
   pull_request:
     branches: [main, master]
 
