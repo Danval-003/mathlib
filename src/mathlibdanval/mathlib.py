@@ -14,9 +14,6 @@ def square(x):
     return x * x
 
 def factorial(n: int) -> int:
-    _ensure_int(n, "n")
-    if n < 0:
-        raise ValueError("n must be >= 0")
     # iterativo para evitar recursión profunda
     acc = 1
     for k in range(2, n + 1):
@@ -24,9 +21,6 @@ def factorial(n: int) -> int:
     return acc
 
 def is_prime(n: int) -> bool:
-    _ensure_int(n, "n")
-    if n < 0:
-        raise ValueError("n must be non-negative")
     if n < 2:
         return False
     if n % 2 == 0:
@@ -53,8 +47,6 @@ def gcd(a: int, b: int) -> int:
 def lcm(a: int, b: int) -> int:
     _ensure_int(a, "a")
     _ensure_int(b, "b")
-    if a == 0 and b == 0:
-        raise ValueError("lcm(0, 0) is undefined")
     g = gcd(a, b)
     # asegurar no-negativo
     return abs(a // g * b)
