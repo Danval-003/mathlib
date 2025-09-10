@@ -77,7 +77,8 @@ pytest -q
 ├─ tests/                   # pruebas unitarias (pytest)
 ├─ .github/workflows/       # CI y release
 ├─ pyproject.toml           # metadatos de paquete
-└─ README.md
+└─ README.md 
 ```
 
 [1]: https://github.com/Danval-003/mathlib "GitHub - Danval-003/mathlib"
+
