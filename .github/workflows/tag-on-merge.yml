@@ -9,17 +9,24 @@ permissions:
 
 jobs:
   tag:
-    if: contains(github.event.head_commit.message, 'chore(release): v')
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
 
-      - name: Create and push tag from commit message
+      # Extrae la versión SOLO si el commit trae "chore(release): vX.Y.Z"
+      - name: Extract version from commit message
+        id: v
         env:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           VERSION=$(echo "$MSG" | sed -n 's/.*chore(release): v\([0-9][0-9.]*\).*/\1/p')
-          test -n "$VERSION" || { echo "No version found"; exit 1; }
-          git tag "v$VERSION"
-          git push origin "v$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        if: ${{ steps.v.outputs.version != '' }}
+        run: |
+          git tag "v${{ steps.v.outputs.version }}"
+          git push origin "v${{ steps.v.outputs.version }}"
