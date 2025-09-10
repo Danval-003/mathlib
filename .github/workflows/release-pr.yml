@@ -44,7 +44,7 @@ jobs:
         run: |
           semantic-release version --no-push --no-tag --no-vcs-release
 
-          # Leer VERSION desde pyproject.toml (todo INDENTADO)
+          # Leer VERSION desde pyproject.toml
           python - <<'PY' > .version
           import tomllib
           with open("pyproject.toml","rb") as f:
@@ -54,10 +54,28 @@ jobs:
           PY
           echo "VERSION=$(cat .version)" >> $GITHUB_ENV
 
+          # Si PSR no dejó commit (p.ej., no había changes), intentamos commitear cualquier diff pendiente
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "chore(release): v${VERSION}"
+          fi
+
+      - name: Check if branch differs from main
+        run: |
+          git fetch origin main
+          if git diff --quiet origin/main...HEAD; then
+            echo "NO_CHANGES=1" >> $GITHUB_ENV
+            echo "No hay cambios vs main; se omite PR."
+          else
+            echo "NO_CHANGES=0" >> $GITHUB_ENV
+          fi
+
       - name: Push branch
+        if: ${{ env.NO_CHANGES == '0' }}
         run: git push --set-upstream origin "$BRANCH"
 
       - name: Open PR
+        if: ${{ env.NO_CHANGES == '0' }}
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,13 +89,13 @@ jobs:
           echo "PR_NUMBER=$PR" >> $GITHUB_ENV
 
       - name: Approve PR
-        if: ${{ env.PR_NUMBER != '' }}
+        if: ${{ env.NO_CHANGES == '0' && env.PR_NUMBER != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr review $PR_NUMBER --approve
 
       - name: Enable auto-merge (squash)
-        if: ${{ env.PR_NUMBER != '' }}
+        if: ${{ env.NO_CHANGES == '0' && env.PR_NUMBER != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge $PR_NUMBER --auto --squash
