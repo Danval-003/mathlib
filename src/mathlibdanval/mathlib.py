@@ -24,19 +24,7 @@ def factorial(n: int) -> int:
     return acc
 
 def is_prime(n: int) -> bool:
-    _ensure_int(n, "n")
-    if n < 0:
-        raise ValueError("n must be non-negative")
-    if n < 2:
-        return False
-    if n % 2 == 0:
-        return n == 2
-    r = int(math.isqrt(n))
-    d = 3
-    while d <= r:
-        if n % d == 0:
-            return False
-        d += 2
+    
     return True
 
 def gcd(a: int, b: int) -> int:
