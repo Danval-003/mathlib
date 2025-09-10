@@ -4,6 +4,11 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      force_level:
+        description: "Forzar release: none/patch/minor/major"
+        required: false
+        default: "none"
 
 permissions:
   contents: write
@@ -38,23 +43,77 @@ jobs:
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
           git checkout -b "$BRANCH"
 
-      - name: Bump version (NO push / NO tag)
+      - name: Bump version (auto o forzado) — NO push/NO tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_LEVEL: ${{ inputs.force_level }}
         run: |
-          semantic-release version --no-push --no-tag --no-vcs-release
+          set -e
 
-          # Leer VERSION desde pyproject.toml
-          python - <<'PY' > .version
-          import tomllib
-          with open("pyproject.toml","rb") as f:
-              d = tomllib.load(f)
-          v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version","")
-          print(v, end="")
-          PY
-          echo "VERSION=$(cat .version)" >> $GITHUB_ENV
+          if [ "${FORCE_LEVEL:-none}" != "none" ]; then
+            echo ">> Forzando bump ${FORCE_LEVEL}"
+            python - <<'PY'
+            import re, sys, pathlib, tomllib
 
-          # Si PSR no dejó commit (p.ej., no había changes), intentamos commitear cualquier diff pendiente
+            path = pathlib.Path("pyproject.toml")
+            txt  = path.read_text(encoding="utf-8")
+            data = tomllib.loads(txt)
+
+            def get_ver(d):
+                if "project" in d and "version" in d["project"]:
+                    return d["project"]["version"]
+                tp = d.get("tool", {}).get("poetry", {})
+                return tp.get("version")
+
+            old = get_ver(data)
+            if not old:
+                print("No se encontró version en [project] ni [tool.poetry]", file=sys.stderr)
+                sys.exit(1)
+
+            def bump(v, kind):
+                m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", v)
+                if not m: raise SystemExit(f"Version no semver: {v}")
+                M, mnr, p = map(int, m.groups())
+                if kind == "major":
+                    return f"{M+1}.0.0"
+                if kind == "minor":
+                    return f"{M}.{mnr+1}.0"
+                return f"{M}.{mnr}.{p+1}"  # patch
+
+            kind = "${FORCE_LEVEL}".lower()
+            new = bump(old, kind)
+
+            # Reemplazo simple de la primera ocurrencia exacta
+            txt_new = txt.replace(f'version = "{old}"', f'version = "{new}"', 1)
+            path.write_text(txt_new, encoding="utf-8")
+            print(new, end="")
+            PY
+                        VERSION=$(python - <<'PY'
+            import tomllib
+            with open("pyproject.toml","rb") as f:
+                d = tomllib.load(f)
+            v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version","")
+            print(v, end="")
+            PY
+            )
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          else
+            echo ">> Modo automático con python-semantic-release"
+            semantic-release version --no-push --no-tag --no-vcs-release || true
+
+            # Leer versión detectada (si hubo cambio)
+            python - <<'PY' > .version
+            import tomllib
+            with open("pyproject.toml","rb") as f:
+                d = tomllib.load(f)
+            v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version","")
+            print(v, end="")
+            PY
+            echo "VERSION=$(cat .version)" >> $GITHUB_ENV
+          fi
+
+          # Si hay diffs, commit explícito con el mensaje de release
           if ! git diff --quiet; then
             git add -A
             git commit -m "chore(release): v${VERSION}"
