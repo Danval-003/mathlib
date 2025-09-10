@@ -68,7 +68,7 @@ pytest -q
 
 > Asegurate de definir en *Settings → Secrets and variables → Actions* los tokens necesarios (por ejemplo, `PYPI_API_TOKEN`) si vas a publicar.
 
-## 📂 Estructura
+## 📂 Estructura 
 
 ```
 .
@@ -81,4 +81,5 @@ pytest -q
 ```
 
 [1]: https://github.com/Danval-003/mathlib "GitHub - Danval-003/mathlib"
+
 
