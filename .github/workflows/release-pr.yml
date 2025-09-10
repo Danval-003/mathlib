@@ -2,7 +2,7 @@ name: Prepare Release PR
 
 on:
   push:
-    branches: [main, master]   # se ejecuta cuando merges normales entran a main
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -11,8 +11,8 @@ permissions:
 
 jobs:
   prepare:
-    # evita loop cuando el commit ya es "chore(release): vX.Y.Z"
-    if: "! contains(github.event.head_commit.message, 'chore(release)')"
+    # IMPORTANTE: expresión válida con ${{ }}
+    if: ${{ ! contains(github.event.head_commit.message, 'chore(release)') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -44,13 +44,15 @@ jobs:
         run: |
           semantic-release version --no-push --no-tag --no-vcs-release
 
-          # Lee la versión del pyproject
-          python - <<'PY' | tee -a $GITHUB_ENV
-import tomllib
-d = tomllib.load(open("pyproject.toml","rb"))
-v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version")
-print(f"VERSION={v}")
-PY
+          # Leer VERSION desde pyproject.toml (todo INDENTADO)
+          python - <<'PY' > .version
+          import tomllib
+          with open("pyproject.toml","rb") as f:
+              d = tomllib.load(f)
+          v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version","")
+          print(v, end="")
+          PY
+          echo "VERSION=$(cat .version)" >> $GITHUB_ENV
 
       - name: Push branch
         run: git push --set-upstream origin "$BRANCH"
@@ -69,13 +71,13 @@ PY
           echo "PR_NUMBER=$PR" >> $GITHUB_ENV
 
       - name: Approve PR
-        if: env.PR_NUMBER != ''
+        if: ${{ env.PR_NUMBER != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr review $PR_NUMBER --approve
 
       - name: Enable auto-merge (squash)
-        if: env.PR_NUMBER != ''
+        if: ${{ env.PR_NUMBER != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge $PR_NUMBER --auto --squash
