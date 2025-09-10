@@ -1,0 +1,81 @@
+name: Prepare Release PR
+
+on:
+  push:
+    branches: [main, master]   # se ejecuta cuando merges normales entran a main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    # evita loop cuando el commit ya es "chore(release): vX.Y.Z"
+    if: "! contains(github.event.head_commit.message, 'chore(release)')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.10"
+
+      - name: Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install python-semantic-release
+        run: pip install --upgrade python-semantic-release
+
+      - name: Create release branch
+        run: |
+          BRANCH="release/$(date +%Y%m%d-%H%M%S)"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+          git checkout -b "$BRANCH"
+
+      - name: Bump version (NO push / NO tag)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semantic-release version --no-push --no-tag --no-vcs-release
+
+          # Lee la versión del pyproject
+          python - <<'PY' | tee -a $GITHUB_ENV
+import tomllib
+d = tomllib.load(open("pyproject.toml","rb"))
+v = (d.get("project",{}) or d.get("tool",{}).get("poetry",{})).get("version")
+print(f"VERSION={v}")
+PY
+
+      - name: Push branch
+        run: git push --set-upstream origin "$BRANCH"
+
+      - name: Open PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore(release): v${VERSION}" \
+            --body "Automated release PR for v${VERSION}"
+          PR=$(gh pr view "$BRANCH" --json number -q .number)
+          echo "PR_NUMBER=$PR" >> $GITHUB_ENV
+
+      - name: Approve PR
+        if: env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr review $PR_NUMBER --approve
+
+      - name: Enable auto-merge (squash)
+        if: env.PR_NUMBER != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge $PR_NUMBER --auto --squash
